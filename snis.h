@@ -499,6 +499,8 @@ struct ship_data {
 #define TURRET_FIRE_INTERVAL 150
 #define TURRET_TYPE_BLOCK 0
 #define TURRET_TYPE_WOMBAT 1
+#define WOMBAT_TURRET_CHANCE 33
+#define NPC_TURRET_FIRE_INTERVAL 30
 
 /* Where the turret sits on the wombat, and where its barrels are, in units of SHIP_MESH_SCALE */
 #define WOMBAT_TURRET_X (-4.0)

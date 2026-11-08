@@ -176,6 +176,8 @@ static float enemy_torpedo_fire_chance = ENEMY_LASER_FIRE_CHANCE;
 static int enemy_laser_fire_interval = ENEMY_LASER_FIRE_INTERVAL;
 static int enemy_torpedo_fire_interval = ENEMY_TORPEDO_FIRE_INTERVAL;
 static int enemy_missile_fire_interval = ENEMY_MISSILE_FIRE_INTERVAL;
+static int wombat_turret_chance = WOMBAT_TURRET_CHANCE;
+static int npc_turret_fire_interval = NPC_TURRET_FIRE_INTERVAL;
 static float missile_proximity_distance = MISSILE_PROXIMITY_DISTANCE;
 static float flare_proximity_distance = FLARE_PROXIMITY_DISTANCE;
 static int flare_cooldown_time = FLARE_COOLDOWN_TIME;
@@ -1472,6 +1474,7 @@ static void generic_move(__attribute__((unused)) struct snis_entity *o)
 }
 
 static int add_ship(int faction, int shiptype, int auto_respawn);
+static int add_wombat_turret(struct snis_entity *ship);
 static void add_new_rts_unit(struct snis_entity *builder)
 {
 	float dx, dy, dz;
@@ -12077,7 +12080,49 @@ default_move:
 	return;
 }
 
-static void turret_fire(struct snis_entity *o)
+static void wombat_turret_fire(struct snis_entity *o, struct snis_entity *parent)
+{
+	union vec3 forwardvec = { { LASER_VELOCITY, 0.0f, 0.0f } };
+	union vec3 barrel_r_offset = { { WOMBAT_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
+					 WOMBAT_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
+	union vec3 barrel_l_offset = { { WOMBAT_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
+					 -WOMBAT_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
+	union vec3 velocity;
+	int l1, l2;
+
+	quat_rot_vec(&velocity, &forwardvec, &o->orientation);
+	quat_rot_vec_self(&barrel_r_offset, &o->orientation);
+	quat_rot_vec_self(&barrel_l_offset, &o->orientation);
+
+	velocity.v.x += parent->vx;
+	velocity.v.y += parent->vy;
+	velocity.v.z += parent->vz;
+
+	l1 = add_laser(o->x + barrel_r_offset.v.x,
+			o->y + barrel_r_offset.v.y,
+			o->z + barrel_r_offset.v.z,
+			velocity.v.x, velocity.v.y, velocity.v.z,
+			&o->orientation, parent->id, TARGET_ALL_SYSTEMS);
+	if (l1 >= 0) {
+		go[l1].tsd.laser.power = TURRET_LASER_POWER;
+		go[l1].tsd.laser.wavelength = parent->tsd.ship.phaser_wavelength;
+	}
+
+	l2 = add_laser(o->x + barrel_l_offset.v.x,
+			o->y + barrel_l_offset.v.y,
+			o->z + barrel_l_offset.v.z,
+			velocity.v.x, velocity.v.y, velocity.v.z,
+			&o->orientation, parent->id, TARGET_ALL_SYSTEMS);
+	if (l2 >= 0) {
+		go[l2].tsd.laser.power = TURRET_LASER_POWER;
+		go[l2].tsd.laser.wavelength = parent->tsd.ship.phaser_wavelength;
+	}
+
+	o->tsd.turret.fire_countdown = o->tsd.turret.fire_countdown_reset_value;
+	snis_queue_add_sound(LASER_FIRE_SOUND, ROLE_SOUNDSERVER, parent->id);
+}
+
+static void block_turret_fire(struct snis_entity *o)
 {
 	union vec3 pos_right = { { 40.0, 0.0, 20.0 } };
 	union vec3 pos_left = { { 40.0, 0.0, -20.0 } };
@@ -12095,26 +12140,84 @@ static void turret_fire(struct snis_entity *o)
 	o->tsd.turret.fire_countdown = o->tsd.turret.fire_countdown_reset_value;
 }
 
+static void turret_fire(struct snis_entity *o, struct snis_entity *parent)
+{
+	if (o->tsd.turret.turret_type == TURRET_TYPE_WOMBAT)
+		wombat_turret_fire(o, parent);
+	else
+		block_turret_fire(o);
+}
+
+static uint32_t wombat_turret_choose_target(struct snis_entity *turret, struct snis_entity *ship)
+{
+	int n;
+	struct snis_entity *v;
+
+	if (ship->type != OBJTYPE_NPCSHIP)
+		return (uint32_t) -1;
+	n = ship->tsd.ship.nai_entries - 1;
+	if (n < 0 || ship->tsd.ship.ai[n].ai_mode != AI_MODE_ATTACK)
+		return (uint32_t) -1;
+	v = lookup_entity_by_id(ship->tsd.ship.ai[n].u.attack.victim_id);
+	if (!v || !v->alive || (v->type != OBJTYPE_BRIDGE && v->type != OBJTYPE_NPCSHIP))
+		return (uint32_t) -1;
+	if (object_dist2(turret, v) > LASER_RANGE * LASER_RANGE || planet_between_objs(turret, v))
+		return (uint32_t) -1;
+	return v->id;
+}
+
+static uint32_t block_turret_choose_target(struct snis_entity *turret, struct snis_entity *parent)
+{
+	int i, root, closest = -1;
+	double min_dist = 1e20;
+
+	root = lookup_by_id(turret->tsd.turret.root_id);
+	if (root < 0 || (parent->type == OBJTYPE_BLOCK && parent->tsd.block.health == 0))
+		return (uint32_t) -1;
+	for (i = 0; (size_t) i < ARRAYSIZE(go[root].tsd.block.naughty_list); i++) {
+		if (go[root].tsd.block.naughty_list[i] == (uint32_t) -1)
+			break;
+		int n = lookup_by_id(go[root].tsd.block.naughty_list[i]);
+		if (n < 0)
+			continue;
+		double dist2 = object_dist2(turret, &go[n]);
+		if (dist2 > LASER_RANGE * LASER_RANGE)
+			continue;
+		if (dist2 < min_dist) {
+			min_dist = dist2;
+			closest = n;
+		}
+	}
+	if (closest < 0)
+		return (uint32_t) -1;
+	return go[closest].id;
+}
+
 static void turret_move(struct snis_entity *o)
 {
 	struct snis_entity *parent, *target;
 	union vec3 pos;
 	int i, t;
-	int root, aim_is_good;
-	double min_dist = 1e20;
-	int closest = -1;
+	int aim_is_good;
 	struct turret_params tparams;
 
-	tparams.elevation_lower_limit = -30.0 * M_PI / 180.0;
-	tparams.elevation_upper_limit = 90.0 * M_PI / 180.0;
+	if (o->tsd.turret.turret_type == TURRET_TYPE_WOMBAT) {
+		tparams.elevation_lower_limit = 0.0;
+		tparams.elevation_upper_limit = 90.0 * M_PI / 180.0;
+	} else {
+		tparams.elevation_lower_limit = -30.0 * M_PI / 180.0;
+		tparams.elevation_upper_limit = 90.0 * M_PI / 180.0;
+	}
 	tparams.azimuth_lower_limit = -3.0 * M_PI; /* no limit */
 	tparams.azimuth_upper_limit = 3.0 * M_PI; /* no limit */
 	tparams.elevation_rate_limit = 6.0 * M_PI / 180.0; /* 60 degrees/sec at 10Hz */
 	tparams.azimuth_rate_limit = 6.0 * M_PI / 180.0; /* 60 degrees/sec at 10Hz */
 
 	if (o->tsd.turret.health == 0) {
-		/* TODO add turret derelict */
+		(void) add_explosion(o->x, o->y, o->z, 50, 150, 50, o->type);
 		o->alive = 0;
+		delete_from_clients_and_server(o);
+		return;
 	}
 	if (o->tsd.turret.parent_id == (uint32_t) -1)
 		goto default_move;
@@ -12122,36 +12225,20 @@ static void turret_move(struct snis_entity *o)
 	if (i < 0)
 		goto default_move;
 	parent = &go[i];
+	if (!parent->alive)
+		goto default_move;
+
+	o->sdata.faction = parent->sdata.faction;
 
 	pos.v.x = o->tsd.turret.dx;
 	pos.v.y = o->tsd.turret.dy;
 	pos.v.z = o->tsd.turret.dz;
 
 	/* Check to see what our target should be, if anything */
-	root = lookup_by_id(o->tsd.turret.root_id);
-	if (root < 0 || (parent->type == OBJTYPE_BLOCK && parent->tsd.block.health == 0)) {
-		o->tsd.turret.current_target_id = (uint32_t) -1;
-	} else {
-		for (i = 0; (size_t) i < ARRAYSIZE(go[root].tsd.block.naughty_list); i++)  {
-			if (go[root].tsd.block.naughty_list[i] == (uint32_t) -1)
-				break;
-			int n = lookup_by_id(go[root].tsd.block.naughty_list[i]);
-			if (n < 0)
-				continue;
-			double dist2 = object_dist2(o, &go[n]);
-			if (dist2 > LASER_RANGE * LASER_RANGE) /* too far? */
-				continue;
-			if (dist2 < min_dist) {
-				min_dist = dist2;
-				closest = n;
-			}
-		}
-		if (closest < 0) {
-			o->tsd.turret.current_target_id = (uint32_t) -1;
-		} else {
-			o->tsd.turret.current_target_id = go[closest].id;
-		}
-	}
+	if (o->tsd.turret.turret_type == TURRET_TYPE_WOMBAT)
+		o->tsd.turret.current_target_id = wombat_turret_choose_target(o, parent);
+	else
+		o->tsd.turret.current_target_id = block_turret_choose_target(o, parent);
 
 	if (o->tsd.turret.current_target_id == (uint32_t) -1) { /* no target, return to rest orientation */
 		union quat rest_orientation, new_turret_orientation, new_turret_base_orientation;
@@ -12196,8 +12283,11 @@ static void turret_move(struct snis_entity *o)
 					&new_turret_orientation, &new_turret_base_orientation, &aim_is_good);
 			o->orientation = new_turret_orientation;
 			o->tsd.turret.base_orientation = new_turret_base_orientation;
-			if (aim_is_good && o->tsd.turret.fire_countdown == 0)
-				turret_fire(o);
+			if (aim_is_good &&
+				turret_can_aim_at(aim_point.v.x, aim_point.v.y, aim_point.v.z,
+						o->x, o->y, o->z, &rest_orientation, &tparams) &&
+				o->tsd.turret.fire_countdown == 0)
+				turret_fire(o, parent);
 		}
 	}
 	quat_rot_vec_self(&pos, &parent->orientation);
@@ -13452,6 +13542,8 @@ static int add_ship(int faction, int shiptype, int auto_respawn)
 		}
 	}
 	ship_registry_add_entry(&ship_registry, go[i].id, SHIP_REG_TYPE_REGISTRATION, registration);
+	if (shiptype == SHIP_CLASS_WOMBAT && snis_randn(100) < wombat_turret_chance)
+		add_wombat_turret(&go[i]);
 	return i;
 }
 
@@ -14258,6 +14350,26 @@ static int add_turret(int parent_id, double x, double y, double z,
 		go[i].tsd.turret.fire_countdown_reset_value = turret_fire_interval;
 	go[i].tsd.turret.turret_type = turret_type;
 	go[i].move = turret_move;
+	return i;
+}
+
+static int add_wombat_turret(struct snis_entity *ship)
+{
+	union vec3 up = { { 0.0, 1.0, 0.0 } };
+	union vec3 pos = { { WOMBAT_TURRET_X * SHIP_MESH_SCALE,
+			     WOMBAT_TURRET_Y * SHIP_MESH_SCALE,
+			     WOMBAT_TURRET_Z * SHIP_MESH_SCALE } };
+	union vec3 wpos;
+	int i;
+
+	quat_rot_vec(&wpos, &pos, &ship->orientation);
+	i = add_turret(ship->id, ship->x + wpos.v.x, ship->y + wpos.v.y, ship->z + wpos.v.z,
+			pos.v.x, pos.v.y, pos.v.z, identity_quat, up,
+			npc_turret_fire_interval, TURRET_TYPE_WOMBAT);
+	if (i >= 0) {
+		go[i].orientation = ship->orientation;
+		go[i].sdata.faction = ship->sdata.faction;
+	}
 	return i;
 }
 
@@ -21258,6 +21370,14 @@ static struct tweakable_var_descriptor server_tweak[] = {
 		"10THS OF SECS. MINIMUM PERIOD BETWEEN ENEMY LASER FIRE",
 		&enemy_laser_fire_interval, 'i',
 		0.0, 0.0, 0.0, 0, 10000, ENEMY_LASER_FIRE_INTERVAL, 0 },
+	{ "WOMBAT_TURRET_CHANCE",
+		"PERCENT CHANCE AN NPC WOMBAT HAS A TURRET (0-100)",
+		&wombat_turret_chance, 'i',
+		0.0, 0.0, 0.0, 0, 100, WOMBAT_TURRET_CHANCE, 0 },
+	{ "NPC_TURRET_FIRE_INTERVAL",
+		"10THS OF SECS. MINIMUM PERIOD BETWEEN NPC TURRET LASER FIRE",
+		&npc_turret_fire_interval, 'i',
+		0.0, 0.0, 0.0, 0, 10000, NPC_TURRET_FIRE_INTERVAL, 0 },
 	{ "TORPEDO_FIRE_INTERVAL",
 		"10THS OF SECS. MINIMUM PERIOD BETWEEN ENEMY TORPEDO FIRE",
 		&enemy_torpedo_fire_interval, 'i',

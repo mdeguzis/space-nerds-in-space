@@ -497,6 +497,13 @@ struct ship_data {
 #define TURRET_LASER_POWER 20
 #define TURRET_LASER_WAVELENGTH 128
 #define TURRET_FIRE_INTERVAL 150
+
+/* Where the turret sits on the wombat, and where its barrels are, in units of SHIP_MESH_SCALE */
+#define WOMBAT_TURRET_X (-4.0)
+#define WOMBAT_TURRET_Y (5.45)
+#define WOMBAT_TURRET_Z (0.0)
+#define WOMBAT_TURRET_BARREL_X (4.0)
+#define WOMBAT_TURRET_BARREL_Z (1.5)	/* +/- for right/left barrel */
 #define PATROL_ATTACK_DIST (LASER_RANGE)
 #define LASERBEAM_DURATION 5 
 #define MINING_LASER_DURATION 2 

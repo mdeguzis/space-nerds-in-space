@@ -10880,7 +10880,9 @@ static void show_weapons_camera_view(void)
 	adjust_weapons_azimuth_angle(&adjusted_cam_orientation);
 
 	union vec3 turret_pos = {
-		{ -4 * SHIP_MESH_SCALE, 5.45 * SHIP_MESH_SCALE, 0 * SHIP_MESH_SCALE },
+		{ WOMBAT_TURRET_X * SHIP_MESH_SCALE,
+		  WOMBAT_TURRET_Y * SHIP_MESH_SCALE,
+		  WOMBAT_TURRET_Z * SHIP_MESH_SCALE },
 	};
 	quat_rot_vec_self(&turret_pos, &o->orientation);
 	vec3_add_c_self(&turret_pos, cx, cy, cz);
@@ -11109,7 +11111,9 @@ static struct entity *main_view_add_player_ship_entity(struct snis_entity *o, in
 	set_render_style(player_ship, render_style);
 
 	struct entity *turret_base = add_entity(ecx, ship_turret_base_mesh,
-		-4 * SHIP_MESH_SCALE, 5.45 * SHIP_MESH_SCALE, 0 * SHIP_MESH_SCALE,
+		WOMBAT_TURRET_X * SHIP_MESH_SCALE,
+		WOMBAT_TURRET_Y * SHIP_MESH_SCALE,
+		WOMBAT_TURRET_Z * SHIP_MESH_SCALE,
 		SHIP_COLOR);
 
 	if (turret_base) {

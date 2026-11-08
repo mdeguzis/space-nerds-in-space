@@ -12122,7 +12122,8 @@ static void wombat_turret_fire(struct snis_entity *o, struct snis_entity *parent
 	}
 
 	o->tsd.turret.fire_countdown = o->tsd.turret.fire_countdown_reset_value;
-	snis_queue_add_sound(LASER_FIRE_SOUND, ROLE_SOUNDSERVER, parent->id);
+	if (parent->type == OBJTYPE_BRIDGE)
+		snis_queue_add_sound(LASER_FIRE_SOUND, ROLE_SOUNDSERVER, parent->id);
 }
 
 static void block_turret_fire(struct snis_entity *o)

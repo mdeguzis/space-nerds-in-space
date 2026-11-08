@@ -279,7 +279,7 @@ int snis_opcode_def_init(void)
 	rc |= init_opcode_subcode_def(OPCODE_TEXTSCREEN_OP, OPCODE_TEXTSCREEN_MENU, "n/a");
 	rc |= init_opcode_subcode_def(OPCODE_TEXTSCREEN_OP, OPCODE_TEXTSCREEN_MENU_CHOICE, "bbb");
 	rc |= init_opcode_def(OPCODE_UPDATE_BLOCK, "bwwSSSSSSQbbb");
-	rc |= init_opcode_def(OPCODE_UPDATE_TURRET, "bwwSSSQQb");
+	rc |= init_opcode_def(OPCODE_UPDATE_TURRET, "bwwSSSQQbb");
 	rc |= init_opcode_def(OPCODE_LATENCY_CHECK, "bqq");
 	rc |= init_opcode_def(OPCODE_REQUEST_STARMAP, "bwb");
 	rc |= init_opcode_subcode_def(OPCODE_SET_WAYPOINT, OPCODE_SET_WAYPOINT_CLEAR, "bbb");

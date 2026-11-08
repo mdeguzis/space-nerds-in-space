@@ -41,7 +41,7 @@
 #include "shape_collision.h"
 
 #define DEFAULT_SOLAR_SYSTEM "default"
-#define SNIS_PROTOCOL_VERSION "SNIS075"
+#define SNIS_PROTOCOL_VERSION "SNIS076"
 #define TRANSPORTER_TAG_LEN 5
 #define COMMON_MTWIST_SEED 97872
 /* dimensions of the "known" universe */
@@ -497,6 +497,8 @@ struct ship_data {
 #define TURRET_LASER_POWER 20
 #define TURRET_LASER_WAVELENGTH 128
 #define TURRET_FIRE_INTERVAL 150
+#define TURRET_TYPE_BLOCK 0
+#define TURRET_TYPE_WOMBAT 1
 
 /* Where the turret sits on the wombat, and where its barrels are, in units of SHIP_MESH_SCALE */
 #define WOMBAT_TURRET_X (-4.0)
@@ -1061,6 +1063,7 @@ struct turret_data {
 	union quat base_orientation;
 	union vec3 up_direction;
 	uint8_t health;
+	uint8_t turret_type;
 #ifdef SNIS_CLIENT_DATA
 	union quat base_orientation_history[SNIS_ENTITY_NUPDATE_HISTORY];
 	struct entity *turret_base_entity;

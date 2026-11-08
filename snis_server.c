@@ -14236,7 +14236,7 @@ static uint32_t find_root_id(int parent_id)
 static int add_turret(int parent_id, double x, double y, double z,
 			double dx, double dy, double dz,
 			union quat relative_orientation, union vec3 up,
-			int turret_fire_interval)
+			int turret_fire_interval, uint8_t turret_type)
 {
 	int i;
 	i = add_generic_object(x, y, z, 0.0, 0.0, 0.0, 0.0, OBJTYPE_TURRET);
@@ -14256,6 +14256,7 @@ static int add_turret(int parent_id, double x, double y, double z,
 		go[i].tsd.turret.fire_countdown_reset_value = TURRET_FIRE_INTERVAL;
 	else
 		go[i].tsd.turret.fire_countdown_reset_value = turret_fire_interval;
+	go[i].tsd.turret.turret_type = turret_type;
 	go[i].move = turret_move;
 	return i;
 }
@@ -14282,7 +14283,7 @@ static int l_add_turret(lua_State *l)
 		return 1;
 	}
 	i = add_turret(parent_id, 0.0, 0.0, 0.0, x, y, z, identity_quat, up,
-			(int) firing_interval);
+			(int) firing_interval, TURRET_TYPE_BLOCK);
 	if (i < 0)
 		lua_pushnil(l);
 	else
@@ -14517,7 +14518,8 @@ static void add_turrets_to_block_face(int parent_id, int face, int rows, int col
 				add_turret(go[blk].id, 0, 0, 0,
 						platformsx * 0.65 * xoff[face],
 						platformsy * 0.65 * yoff[face],
-						platformsz * 0.65 * zoff[face], rest_orientation, up, -1);
+						platformsz * 0.65 * zoff[face],
+						rest_orientation, up, -1, TURRET_TYPE_BLOCK);
 				go[blk].tsd.block.health = 121; /* mortal */
 			}
 		}
@@ -28884,14 +28886,15 @@ static void send_update_block_packet(struct game_client *c,
 static void send_update_turret_packet(struct game_client *c,
 	struct snis_entity *o)
 {
-	pb_queue_to_client(c, snis_opcode_pkt("bwwSSSQQb", OPCODE_UPDATE_TURRET,
+	pb_queue_to_client(c, snis_opcode_pkt("bwwSSSQQbb", OPCODE_UPDATE_TURRET,
 					o->id, o->timestamp,
 					o->x, (int32_t) UNIVERSE_DIM,
 					o->y, (int32_t) UNIVERSE_DIM,
 					o->z, (int32_t) UNIVERSE_DIM,
 					&o->orientation,
 					&o->tsd.turret.base_orientation,
-					o->tsd.turret.health));
+					o->tsd.turret.health,
+					o->tsd.turret.turret_type));
 }
 
 static void send_update_spacemonster_packet(struct game_client *c,

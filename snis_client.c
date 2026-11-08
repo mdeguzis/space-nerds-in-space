@@ -2209,11 +2209,14 @@ static void update_orientation_history(union quat history[], union quat *new_ori
 }
 
 static int update_turret(uint32_t id, uint32_t timestamp, double x, double y, double z,
-			union quat *orientation, union quat *base_orientation, uint8_t health)
+			union quat *orientation, union quat *base_orientation, uint8_t health,
+			uint8_t turret_type)
 {
 	int i;
 	struct entity *e;
 	double vx, vy, vz;
+	struct mesh *mesh, *base_mesh;
+	int color;
 
 	i = lookup_object_by_id(id);
 	if (i >= 0) {
@@ -2222,15 +2225,25 @@ static int update_turret(uint32_t id, uint32_t timestamp, double x, double y, do
 		vz = z - go[i].z;
 		update_generic_object(i, timestamp, x, y, z, vx, vy, vz, orientation, 1);
 	} else {
-		e = add_entity(ecx, turret_mesh, x, y, z, BLOCK_COLOR);
+		if (turret_type == TURRET_TYPE_WOMBAT) {
+			mesh = ship_turret_mesh;
+			base_mesh = ship_turret_base_mesh;
+			color = SHIP_COLOR;
+		} else {
+			mesh = turret_mesh;
+			base_mesh = turret_base_mesh;
+			color = BLOCK_COLOR;
+		}
+		e = add_entity(ecx, mesh, x, y, z, color);
 		if (!e)
 			return -1;
 		i = add_generic_object(id, timestamp, x, y, z, 0.0, 0.0, 0.0, orientation, OBJTYPE_TURRET, 1, e);
 		if (i < 0)
 			return i;
-		go[i].tsd.turret.turret_base_entity = add_entity(ecx, turret_base_mesh, x, y, z, BLOCK_COLOR);
+		go[i].tsd.turret.turret_base_entity = add_entity(ecx, base_mesh, x, y, z, color);
 	}
 	go[i].tsd.turret.health = health;
+	go[i].tsd.turret.turret_type = turret_type;
 	update_orientation_history(go[i].tsd.turret.base_orientation_history, base_orientation);
 	return 0;
 }
@@ -8583,17 +8596,17 @@ static int process_update_turret_packet(void)
 	double dx, dy, dz;
 	union quat orientation, base_orientation;
 	int rc;
-	uint8_t health;
+	uint8_t health, turret_type;
 
-	rc = read_and_unpack_buffer(buffer, "wwSSSQQb", &id, &timestamp,
+	rc = read_and_unpack_buffer(buffer, "wwSSSQQbb", &id, &timestamp,
 			&dx, (int32_t) UNIVERSE_DIM,
 			&dy, (int32_t) UNIVERSE_DIM,
 			&dz, (int32_t) UNIVERSE_DIM,
-			&orientation, &base_orientation, &health);
+			&orientation, &base_orientation, &health, &turret_type);
 	if (rc != 0)
 		return rc;
 	pthread_mutex_lock(&universe_mutex);
-	rc = update_turret(id, timestamp, dx, dy, dz, &orientation, &base_orientation, health);
+	rc = update_turret(id, timestamp, dx, dy, dz, &orientation, &base_orientation, health, turret_type);
 	pthread_mutex_unlock(&universe_mutex);
 	return (rc < 0);
 }

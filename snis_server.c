@@ -1902,6 +1902,7 @@ static void wormhole_collision_detection(void *wormhole, void *object)
 	case OBJTYPE_ASTEROID:
 		/* because of functional movement of asteroids. *sigh* */
 	case OBJTYPE_WORMHOLE:
+	case OBJTYPE_TURRET:
 		return;
 	default:
 		dist2 = object_dist2(t, o);
@@ -8739,7 +8740,8 @@ static void ship_collision_avoidance(void *context, void *entity)
 	if (o == obstacle) /* don't avoid oneself */
 		return;
 
-	if (obstacle->type == OBJTYPE_SPARK || obstacle->type == OBJTYPE_DOCKING_PORT)
+	if (obstacle->type == OBJTYPE_SPARK || obstacle->type == OBJTYPE_DOCKING_PORT ||
+	    obstacle->type == OBJTYPE_TURRET)
 		return;
 
 	/* Tow ship should not try to avoid thing it's towing or attempting to tow */
@@ -10466,6 +10468,7 @@ static void player_collision_detection(void *player, void *object)
 	case OBJTYPE_STARBASE:
 	case OBJTYPE_WARP_CORE:
 	case OBJTYPE_FLARE:
+	case OBJTYPE_TURRET:
 		return;
 	default:
 		break;

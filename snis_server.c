@@ -29706,6 +29706,8 @@ static void move_objects(double absolute_time, int discontinuity)
 
 	for (i = 0; i <= snis_object_pool_highest_object(pool); i++) {
 		if (go[i].alive) {
+			if (go[i].type == OBJTYPE_TURRET)
+				continue; /* moved below, after their parents */
 			go[i].move(&go[i]);
 			if (go[i].type == OBJTYPE_NPCSHIP &&
 				go[i].sdata.faction < ARRAYSIZE(faction_population)) {
@@ -29739,6 +29741,16 @@ static void move_objects(double absolute_time, int discontinuity)
 					delete_from_clients_and_server(&go[i]);
 				}
 			}
+		}
+	}
+
+	/* Turrets compute their position from their parent, so move them after
+	 * everything else to keep them from lagging a tick behind their parent.
+	 */
+	for (i = 0; i <= snis_object_pool_highest_object(pool); i++) {
+		if (go[i].alive && go[i].type == OBJTYPE_TURRET) {
+			go[i].move(&go[i]);
+			netstats.nobjects++;
 		}
 	}
 	/* Update multiverse every 10 seconds */

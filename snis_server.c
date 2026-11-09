@@ -26828,9 +26828,7 @@ static int process_request_manual_laser(struct game_client *c)
 {
 	struct snis_entity *ship = &go[c->ship_index];
 	union vec3 forwardvec = { { LASER_VELOCITY, 0.0f, 0.0f } };
-	union vec3 turret_pos = { { WOMBAT_TURRET_X * SHIP_MESH_SCALE,
-				    WOMBAT_TURRET_Y * SHIP_MESH_SCALE,
-				    WOMBAT_TURRET_Z * SHIP_MESH_SCALE } };
+	union vec3 turret_pos;
 	union vec3 barrel_r_offset = { { SHIP_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
 					 SHIP_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
 	union vec3 barrel_l_offset = { { SHIP_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
@@ -26845,6 +26843,7 @@ static int process_request_manual_laser(struct game_client *c)
 	}
 
 	/* Calculate which way weapons is pointed, and velocity of laser. */
+	turret_pos = ship_type[ship->tsd.ship.shiptype].hard_point.pos;
 	quat_rot_vec_self(&turret_pos, &ship->orientation);
 
 	quat_mul(&orientation, &ship->orientation, &ship->tsd.ship.weap_orientation);
@@ -30500,6 +30499,10 @@ static int read_ship_types(void)
 			fprintf(stderr, "%s: %s\n", path, strerror(errno));
 		return -1;
 	}
+	if (nshiptypes <= SHIP_CLASS_WOMBAT || !ship_type[SHIP_CLASS_WOMBAT].hard_point.present)
+		fprintf(stderr,
+			"Warning: WOMBAT has no hard point in %s; player turret will sit at the origin (update your assets?)\n",
+			path);
 	return 0;
 }
 

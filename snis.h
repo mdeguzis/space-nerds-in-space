@@ -502,11 +502,6 @@ struct ship_data {
 #define NPC_TURRET_CHANCE 33
 #define NPC_TURRET_FIRE_INTERVAL 30
 
-/* Where the turret sits on the wombat, in units of SHIP_MESH_SCALE */
-#define WOMBAT_TURRET_X (-4.0)
-#define WOMBAT_TURRET_Y (5.45)
-#define WOMBAT_TURRET_Z (0.0)
-
 /* Where the barrels of the ship turret (spaceship_turret.stl) are, relative to the
  * turret's origin, in units of SHIP_MESH_SCALE.
  */

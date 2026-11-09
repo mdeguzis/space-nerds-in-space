@@ -10892,11 +10892,7 @@ static void show_weapons_camera_view(void)
 	adjusted_cam_orientation = camera_orientation;
 	adjust_weapons_azimuth_angle(&adjusted_cam_orientation);
 
-	union vec3 turret_pos = {
-		{ WOMBAT_TURRET_X * SHIP_MESH_SCALE,
-		  WOMBAT_TURRET_Y * SHIP_MESH_SCALE,
-		  WOMBAT_TURRET_Z * SHIP_MESH_SCALE },
-	};
+	union vec3 turret_pos = ship_type[o->tsd.ship.shiptype].hard_point.pos;
 	quat_rot_vec_self(&turret_pos, &o->orientation);
 	vec3_add_c_self(&turret_pos, cx, cy, cz);
 
@@ -11086,6 +11082,19 @@ static void show_weapons_camera_view(void)
 
 		show_gunsight();
 	}
+
+	/* Temporary 2026-11-09: Added hard point to ship_types.txt, if it's missing,
+	 * weapons screen will draw the turret and view in the wrong place.
+	 * Once enough time has passed and nobody still has the old files lying
+	 * around, we can remove this (give it 6 months or so, remove in summer 2027).
+	 */
+	if (!ship_type[o->tsd.ship.shiptype].hard_point.present && (timer & 0x08)) {
+		sng_set_foreground(UI_COLOR(weap_warning));
+		sng_center_xy_draw_string("WOMBAT HARD POINT MISSING", SMALL_FONT,
+				0.5 * SCREEN_WIDTH, txy(200));
+		sng_center_xy_draw_string("DISCONNECT AND UPDATE ASSETS TO FIX", SMALL_FONT,
+				0.5 * SCREEN_WIDTH, txy(230));
+	}
 	pthread_mutex_unlock(&universe_mutex);
 }
 
@@ -11123,11 +11132,9 @@ static struct entity *main_view_add_player_ship_entity(struct snis_entity *o, in
 	entity_set_in_shade(player_ship, object_in_shade(o));
 	set_render_style(player_ship, render_style);
 
+	union vec3 *tpos = &ship_type[o->tsd.ship.shiptype].hard_point.pos;
 	struct entity *turret_base = add_entity(ecx, ship_turret_base_mesh,
-		WOMBAT_TURRET_X * SHIP_MESH_SCALE,
-		WOMBAT_TURRET_Y * SHIP_MESH_SCALE,
-		WOMBAT_TURRET_Z * SHIP_MESH_SCALE,
-		SHIP_COLOR);
+		tpos->v.x, tpos->v.y, tpos->v.z, SHIP_COLOR);
 
 	if (turret_base) {
 		update_entity_orientation(turret_base, &identity_quat);
@@ -26111,6 +26118,10 @@ static int read_ship_types(void)
 			fprintf(stderr, "%s: %s\n", path, strerror(errno));
 		return -1;
 	}
+	if (nshiptypes <= SHIP_CLASS_WOMBAT || !ship_type[SHIP_CLASS_WOMBAT].hard_point.present)
+		fprintf(stderr,
+			"Warning: WOMBAT has no hard point in %s; player turret will sit at the origin (update your assets?)\n",
+			path);
 	return 0;
 }
 

@@ -176,7 +176,7 @@ static float enemy_torpedo_fire_chance = ENEMY_LASER_FIRE_CHANCE;
 static int enemy_laser_fire_interval = ENEMY_LASER_FIRE_INTERVAL;
 static int enemy_torpedo_fire_interval = ENEMY_TORPEDO_FIRE_INTERVAL;
 static int enemy_missile_fire_interval = ENEMY_MISSILE_FIRE_INTERVAL;
-static int wombat_turret_chance = WOMBAT_TURRET_CHANCE;
+static int npc_turret_chance = NPC_TURRET_CHANCE;
 static int npc_turret_fire_interval = NPC_TURRET_FIRE_INTERVAL;
 static float missile_proximity_distance = MISSILE_PROXIMITY_DISTANCE;
 static float flare_proximity_distance = FLARE_PROXIMITY_DISTANCE;
@@ -1474,7 +1474,7 @@ static void generic_move(__attribute__((unused)) struct snis_entity *o)
 }
 
 static int add_ship(int faction, int shiptype, int auto_respawn);
-static int add_wombat_turret(struct snis_entity *ship);
+static int add_npc_turret(struct snis_entity *ship);
 static void add_new_rts_unit(struct snis_entity *builder)
 {
 	float dx, dy, dz;
@@ -12205,15 +12205,10 @@ static void turret_move(struct snis_entity *o)
 	int aim_is_good;
 	struct turret_params tparams;
 
-	if (o->tsd.turret.turret_type == TURRET_TYPE_SHIP) {
-		tparams.elevation_lower_limit = 0.0;
-		tparams.elevation_upper_limit = 90.0 * M_PI / 180.0;
-	} else {
-		tparams.elevation_lower_limit = -30.0 * M_PI / 180.0;
-		tparams.elevation_upper_limit = 90.0 * M_PI / 180.0;
-	}
-	tparams.azimuth_lower_limit = -3.0 * M_PI; /* no limit */
-	tparams.azimuth_upper_limit = 3.0 * M_PI; /* no limit */
+	tparams.elevation_lower_limit = o->tsd.turret.elevation_lower_limit;
+	tparams.elevation_upper_limit = o->tsd.turret.elevation_upper_limit;
+	tparams.azimuth_lower_limit = o->tsd.turret.azimuth_lower_limit;
+	tparams.azimuth_upper_limit = o->tsd.turret.azimuth_upper_limit;
 	tparams.elevation_rate_limit = 6.0 * M_PI / 180.0; /* 60 degrees/sec at 10Hz */
 	tparams.azimuth_rate_limit = 6.0 * M_PI / 180.0; /* 60 degrees/sec at 10Hz */
 
@@ -13546,8 +13541,8 @@ static int add_ship(int faction, int shiptype, int auto_respawn)
 		}
 	}
 	ship_registry_add_entry(&ship_registry, go[i].id, SHIP_REG_TYPE_REGISTRATION, registration);
-	if (shiptype == SHIP_CLASS_WOMBAT && snis_randn(100) < wombat_turret_chance)
-		add_wombat_turret(&go[i]);
+	if (ship_type[shiptype].hard_point.present && snis_randn(100) < npc_turret_chance)
+		add_npc_turret(&go[i]);
 	return i;
 }
 
@@ -14353,27 +14348,37 @@ static int add_turret(int parent_id, double x, double y, double z,
 	else
 		go[i].tsd.turret.fire_countdown_reset_value = turret_fire_interval;
 	go[i].tsd.turret.turret_type = turret_type;
+	go[i].tsd.turret.elevation_lower_limit = -30.0 * M_PI / 180.0;
+	go[i].tsd.turret.elevation_upper_limit = 90.0 * M_PI / 180.0;
+	go[i].tsd.turret.azimuth_lower_limit = -3.0 * M_PI; /* no limit */
+	go[i].tsd.turret.azimuth_upper_limit = 3.0 * M_PI; /* no limit */
 	go[i].move = turret_move;
 	return i;
 }
 
-static int add_wombat_turret(struct snis_entity *ship)
+static int add_npc_turret(struct snis_entity *ship)
 {
-	union vec3 up = { { 0.0, 1.0, 0.0 } };
-	union vec3 pos = { { WOMBAT_TURRET_X * SHIP_MESH_SCALE,
-			     WOMBAT_TURRET_Y * SHIP_MESH_SCALE,
-			     WOMBAT_TURRET_Z * SHIP_MESH_SCALE } };
-	union vec3 wpos;
+	struct hard_point *hp = &ship_type[ship->tsd.ship.shiptype].hard_point;
+	union vec3 right, wpos;
+	union quat rel;
 	int i;
 
-	quat_rot_vec(&wpos, &pos, &ship->orientation);
+	if (!hp->present)
+		return -1;
+	vec3_cross(&right, &hp->forward, &hp->up); /* turret frame: X forward, Y up, Z right */
+	quat_from_basis(&rel, &hp->forward, &hp->up, &right);
+	quat_rot_vec(&wpos, &hp->pos, &ship->orientation);
 	i = add_turret(ship->id, ship->x + wpos.v.x, ship->y + wpos.v.y, ship->z + wpos.v.z,
-			pos.v.x, pos.v.y, pos.v.z, identity_quat, up,
+			hp->pos.v.x, hp->pos.v.y, hp->pos.v.z, rel, hp->up,
 			npc_turret_fire_interval, TURRET_TYPE_SHIP);
-	if (i >= 0) {
-		go[i].orientation = ship->orientation;
-		go[i].sdata.faction = ship->sdata.faction;
-	}
+	if (i < 0)
+		return i;
+	quat_mul(&go[i].orientation, &ship->orientation, &rel);
+	go[i].sdata.faction = ship->sdata.faction;
+	go[i].tsd.turret.elevation_lower_limit = hp->elevation_lower_limit;
+	go[i].tsd.turret.elevation_upper_limit = hp->elevation_upper_limit;
+	go[i].tsd.turret.azimuth_lower_limit = hp->azimuth_lower_limit;
+	go[i].tsd.turret.azimuth_upper_limit = hp->azimuth_upper_limit;
 	return i;
 }
 
@@ -21374,10 +21379,10 @@ static struct tweakable_var_descriptor server_tweak[] = {
 		"10THS OF SECS. MINIMUM PERIOD BETWEEN ENEMY LASER FIRE",
 		&enemy_laser_fire_interval, 'i',
 		0.0, 0.0, 0.0, 0, 10000, ENEMY_LASER_FIRE_INTERVAL, 0 },
-	{ "WOMBAT_TURRET_CHANCE",
-		"PERCENT CHANCE AN NPC WOMBAT HAS A TURRET (0-100)",
-		&wombat_turret_chance, 'i',
-		0.0, 0.0, 0.0, 0, 100, WOMBAT_TURRET_CHANCE, 0 },
+	{ "NPC_TURRET_CHANCE",
+		"PERCENT CHANCE AN NPC SHIP WITH A HARD POINT HAS A TURRET (0-100)",
+		&npc_turret_chance, 'i',
+		0.0, 0.0, 0.0, 0, 100, NPC_TURRET_CHANCE, 0 },
 	{ "NPC_TURRET_FIRE_INTERVAL",
 		"10THS OF SECS. MINIMUM PERIOD BETWEEN NPC TURRET LASER FIRE",
 		&npc_turret_fire_interval, 'i',

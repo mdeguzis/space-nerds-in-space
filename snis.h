@@ -499,7 +499,7 @@ struct ship_data {
 #define TURRET_FIRE_INTERVAL 150
 #define TURRET_TYPE_BLOCK 0
 #define TURRET_TYPE_SHIP 1
-#define WOMBAT_TURRET_CHANCE 33
+#define NPC_TURRET_CHANCE 33
 #define NPC_TURRET_FIRE_INTERVAL 30
 
 /* Where the turret sits on the wombat, in units of SHIP_MESH_SCALE */
@@ -1078,6 +1078,8 @@ struct turret_data {
 	uint8_t fire_countdown;
 	uint8_t fire_countdown_reset_value;
 	double dx, dy, dz; /* offset position from parent, used only server side */
+	float elevation_lower_limit, elevation_upper_limit; /* radians */
+	float azimuth_lower_limit, azimuth_upper_limit;
 #endif
 };
 

@@ -12083,13 +12083,13 @@ default_move:
 	return;
 }
 
-static void wombat_turret_fire(struct snis_entity *o, struct snis_entity *parent)
+static void ship_turret_fire(struct snis_entity *o, struct snis_entity *parent)
 {
 	union vec3 forwardvec = { { LASER_VELOCITY, 0.0f, 0.0f } };
-	union vec3 barrel_r_offset = { { WOMBAT_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
-					 WOMBAT_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
-	union vec3 barrel_l_offset = { { WOMBAT_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
-					 -WOMBAT_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
+	union vec3 barrel_r_offset = { { SHIP_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
+					 SHIP_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
+	union vec3 barrel_l_offset = { { SHIP_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
+					 -SHIP_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
 	union vec3 velocity;
 	int l1, l2;
 
@@ -12146,13 +12146,13 @@ static void block_turret_fire(struct snis_entity *o)
 
 static void turret_fire(struct snis_entity *o, struct snis_entity *parent)
 {
-	if (o->tsd.turret.turret_type == TURRET_TYPE_WOMBAT)
-		wombat_turret_fire(o, parent);
+	if (o->tsd.turret.turret_type == TURRET_TYPE_SHIP)
+		ship_turret_fire(o, parent);
 	else
 		block_turret_fire(o);
 }
 
-static uint32_t wombat_turret_choose_target(struct snis_entity *turret, struct snis_entity *ship)
+static uint32_t npc_turret_choose_target(struct snis_entity *turret, struct snis_entity *ship)
 {
 	int n;
 	struct snis_entity *v;
@@ -12205,7 +12205,7 @@ static void turret_move(struct snis_entity *o)
 	int aim_is_good;
 	struct turret_params tparams;
 
-	if (o->tsd.turret.turret_type == TURRET_TYPE_WOMBAT) {
+	if (o->tsd.turret.turret_type == TURRET_TYPE_SHIP) {
 		tparams.elevation_lower_limit = 0.0;
 		tparams.elevation_upper_limit = 90.0 * M_PI / 180.0;
 	} else {
@@ -12239,8 +12239,8 @@ static void turret_move(struct snis_entity *o)
 	pos.v.z = o->tsd.turret.dz;
 
 	/* Check to see what our target should be, if anything */
-	if (o->tsd.turret.turret_type == TURRET_TYPE_WOMBAT)
-		o->tsd.turret.current_target_id = wombat_turret_choose_target(o, parent);
+	if (o->tsd.turret.turret_type == TURRET_TYPE_SHIP)
+		o->tsd.turret.current_target_id = npc_turret_choose_target(o, parent);
 	else
 		o->tsd.turret.current_target_id = block_turret_choose_target(o, parent);
 
@@ -14369,7 +14369,7 @@ static int add_wombat_turret(struct snis_entity *ship)
 	quat_rot_vec(&wpos, &pos, &ship->orientation);
 	i = add_turret(ship->id, ship->x + wpos.v.x, ship->y + wpos.v.y, ship->z + wpos.v.z,
 			pos.v.x, pos.v.y, pos.v.z, identity_quat, up,
-			npc_turret_fire_interval, TURRET_TYPE_WOMBAT);
+			npc_turret_fire_interval, TURRET_TYPE_SHIP);
 	if (i >= 0) {
 		go[i].orientation = ship->orientation;
 		go[i].sdata.faction = ship->sdata.faction;
@@ -26826,10 +26826,10 @@ static int process_request_manual_laser(struct game_client *c)
 	union vec3 turret_pos = { { WOMBAT_TURRET_X * SHIP_MESH_SCALE,
 				    WOMBAT_TURRET_Y * SHIP_MESH_SCALE,
 				    WOMBAT_TURRET_Z * SHIP_MESH_SCALE } };
-	union vec3 barrel_r_offset = { { WOMBAT_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
-					 WOMBAT_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
-	union vec3 barrel_l_offset = { { WOMBAT_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
-					 -WOMBAT_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
+	union vec3 barrel_r_offset = { { SHIP_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
+					 SHIP_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
+	union vec3 barrel_l_offset = { { SHIP_TURRET_BARREL_X * SHIP_MESH_SCALE, 0.0f,
+					 -SHIP_TURRET_BARREL_Z * SHIP_MESH_SCALE } };
 	union vec3 velocity;
 	union quat orientation;
 

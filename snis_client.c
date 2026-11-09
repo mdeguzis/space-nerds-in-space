@@ -2225,7 +2225,7 @@ static int update_turret(uint32_t id, uint32_t timestamp, double x, double y, do
 		vz = z - go[i].z;
 		update_generic_object(i, timestamp, x, y, z, vx, vy, vz, orientation, 1);
 	} else {
-		if (turret_type == TURRET_TYPE_WOMBAT) {
+		if (turret_type == TURRET_TYPE_SHIP) {
 			mesh = ship_turret_mesh;
 			base_mesh = ship_turret_base_mesh;
 			color = SHIP_COLOR;

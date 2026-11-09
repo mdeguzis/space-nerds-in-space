@@ -6024,13 +6024,14 @@ static void ai_attack_mode_brain(struct snis_entity *o)
 	if (fabs(dx) < 400 && fabs(dy) < 400 && fabs(dz) < 400) {
 		union vec3 vel, veln;
 
+		vel.v.x = (float) o->vx;
+		vel.v.y = (float) o->vy;
+		vel.v.z = (float) o->vz;
+
 		/* pretty close to enemy? */
-		if (vdist < 1000) {
+		if (vdist < 1000 && vec3_magnitude(&vel) > 1e-4f) {
 			ai_trace(o->id, "ATTACK VICTIM %u CLOSE, ZIPPING PAST", v->id);
 			/* continue zipping past target */
-			vel.v.x = (float) o->vx;
-			vel.v.y = (float) o->vy;
-			vel.v.z = (float) o->vz;
 			vec3_normalize(&veln, &vel);
 			vec3_mul_self(&veln, 800.0f + snis_randn(600));
 			set_ship_destination(o, veln.v.x, veln.v.y, veln.v.z);

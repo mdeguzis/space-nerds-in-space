@@ -26,6 +26,25 @@
 # substituted for the "extension" of the filename.
 # if thrust attach is "!", then there is intentionally no thrust attach file.
 #
+# A ship type may optionally have one hard point, a place where a turret may be
+# mounted on NPC ships of that type (and where the player's turret is mounted):
+#
+#	hard point {
+#		position: -4.0 5.45 0.0
+#		forward: 1.0 0.0 0.0
+#		up: 0.0 1.0 0.0
+#		elevation: 0.0 90.0
+#		azimuth: -540.0 540.0
+#	}
+#
+# position is in model units, after the x/y/z rotations above have been applied
+# (the same convention as thrust attach files); it is scaled by the same amount
+# as the model.  forward is the direction the turret faces when idle, and up is
+# the axis it swivels about.  elevation and azimuth are lower and upper limits in
+# degrees, relative to forward and up.  Azimuth limits of +/- 540 mean no limit.
+# All fields are optional; the defaults are the values shown above, except for
+# position, which defaults to 0 0 0.
+#
 
 ship type {
 	class: CRUISER
@@ -333,6 +352,13 @@ ship type {
 	scrap_value: 2450.0
 	x rotation: -90.0
 	y rotation: 90.0
+	hard point {
+		position: -4.0 5.45 0.0
+		forward: 1.0 0.0 0.0
+		up: 0.0 1.0 0.0
+		elevation: 0.0 90.0
+		azimuth: -540.0 540.0
+	}
 }
 
 ship type {

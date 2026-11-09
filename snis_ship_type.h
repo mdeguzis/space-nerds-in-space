@@ -1,6 +1,8 @@
 #ifndef SNIS_SHIP_TYPE_H__
 #define  SNIS_SHIP_TYPE_H__
 
+#include "quat.h"
+
 #define SHIP_MESH_SCALE (0.5)
 
 #define SHIP_CLASS_CRUISER 0
@@ -27,6 +29,20 @@
 #define SHIP_CLASS_ESCAPE_POD 21
 #define SHIP_CLASS_MANTIS 22
 
+/* A place on a ship model where a turret may be mounted.  pos is relative to the ship's
+ * origin, in world units (already scaled by SHIP_MESH_SCALE * extra_scaling).  forward and
+ * up are orthonormal unit vectors in the ship's frame giving the turret's rest aim direction
+ * and its azimuth axis.  The limits are in radians, measured in that rest frame.
+ */
+struct hard_point {
+	int present;
+	union vec3 pos;
+	union vec3 forward;
+	union vec3 up;
+	float elevation_lower_limit, elevation_upper_limit;
+	float azimuth_lower_limit, azimuth_upper_limit;
+};
+
 struct ship_type_entry {
 	char *class;
 	char *model_file;
@@ -49,6 +65,7 @@ struct ship_type_entry {
 	float mass_kg;
 	uint8_t max_shield_strength;
 	float scrap_value;
+	struct hard_point hard_point;
 };
 
 struct ship_type_entry *snis_read_ship_types(char *filename, int *count);

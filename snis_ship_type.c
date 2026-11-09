@@ -73,6 +73,103 @@ static int parse_int_field(int *var, char *filename, char *line, int linecount)
 	return rc != 1;
 }
 
+/* Parse n (2 or 3) whitespace separated floats into v.  v is untouched on error. */
+static int parse_float_tuple_field(float *v, int n, char *filename, char *line, int linecount)
+{
+	int i, rc;
+	float t[3];
+
+	rc = sscanf(get_field(line), "%f %f %f", &t[0], &t[1], &t[2]);
+	if (rc != n) {
+		fprintf(stderr, "Error at line %d in %s: '%s' (expected %d numbers)\n",
+			linecount, filename, line, n);
+		return 1;
+	}
+	for (i = 0; i < n; i++)
+		v[i] = t[i];
+	return 0;
+}
+
+/* A hard point as written in ship_types.txt: unscaled model units and degrees */
+struct hard_point_spec {
+	int present;
+	float pos[3];
+	float forward[3];
+	float up[3];
+	float elevation[2];
+	float azimuth[2];
+};
+
+static void init_hard_point_spec(struct hard_point_spec *s)
+{
+	memset(s, 0, sizeof(*s));
+	s->forward[0] = 1.0;
+	s->up[1] = 1.0;
+	s->elevation[0] = 0.0;
+	s->elevation[1] = 90.0;
+	s->azimuth[0] = -540.0; /* +/- 540 degrees, i.e. no limit */
+	s->azimuth[1] = 540.0;
+}
+
+/* Convert a hard point spec into a struct hard_point: scale the position, convert degrees to
+ * radians, and make forward and up an orthonormal pair (up is adjusted to be perpendicular to
+ * forward).  Returns 0 on success, 1 if the spec is unusable, in which case hp->present is 0.
+ */
+static int finish_hard_point(struct hard_point_spec *s, float scale, struct hard_point *hp,
+				char *class, char *filename, int linecount)
+{
+	float f[3], u[3], len, dot;
+	int i;
+
+	memset(hp, 0, sizeof(*hp));
+	if (!s->present)
+		return 0;
+
+	len = sqrtf(s->forward[0] * s->forward[0] + s->forward[1] * s->forward[1] +
+			s->forward[2] * s->forward[2]);
+	if (len < 1e-6) {
+		fprintf(stderr, "%s:%d: hard point forward vector for class %s is zero length\n",
+			filename, linecount, class);
+		return 1;
+	}
+	for (i = 0; i < 3; i++)
+		f[i] = s->forward[i] / len;
+
+	dot = s->up[0] * f[0] + s->up[1] * f[1] + s->up[2] * f[2];
+	for (i = 0; i < 3; i++)
+		u[i] = s->up[i] - dot * f[i];
+	len = sqrtf(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+	if (len < 1e-6) {
+		fprintf(stderr, "%s:%d: hard point up vector for class %s is zero or parallel to forward\n",
+			filename, linecount, class);
+		return 1;
+	}
+	for (i = 0; i < 3; i++)
+		u[i] = u[i] / len;
+
+	if (s->elevation[0] > s->elevation[1] || s->azimuth[0] > s->azimuth[1]) {
+		fprintf(stderr, "%s:%d: hard point for class %s has lower limit above upper limit\n",
+			filename, linecount, class);
+		return 1;
+	}
+
+	hp->pos.v.x = s->pos[0] * scale;
+	hp->pos.v.y = s->pos[1] * scale;
+	hp->pos.v.z = s->pos[2] * scale;
+	hp->forward.v.x = f[0];
+	hp->forward.v.y = f[1];
+	hp->forward.v.z = f[2];
+	hp->up.v.x = u[0];
+	hp->up.v.y = u[1];
+	hp->up.v.z = u[2];
+	hp->elevation_lower_limit = s->elevation[0] * M_PI / 180.0;
+	hp->elevation_upper_limit = s->elevation[1] * M_PI / 180.0;
+	hp->azimuth_lower_limit = s->azimuth[0] * M_PI / 180.0;
+	hp->azimuth_upper_limit = s->azimuth[1] * M_PI / 180.0;
+	hp->present = 1;
+	return 0;
+}
+
 struct ship_type_entry *snis_read_ship_types(char *filename, int *count)
 {
 	FILE *f;
@@ -96,6 +193,8 @@ struct ship_type_entry *snis_read_ship_types(char *filename, int *count)
 	int errorcount = 0;
 #define DEFAULT_SCRAP_VALUE 2500.0f
 	float scrap_value = DEFAULT_SCRAP_VALUE;
+	struct hard_point_spec hps;
+	int in_hard_point = 0;
 
 	nalloced = 30;
 	st = malloc(sizeof(*st) * nalloced);
@@ -130,6 +229,7 @@ struct ship_type_entry *snis_read_ship_types(char *filename, int *count)
 	axis[2] = '\0';
 	axis[3] = '\0';
 	nrots = 0;
+	init_hard_point_spec(&hps);
 
 	while (!feof(f)) {
 		x = fgets(line, sizeof(line) - 1, f);
@@ -151,6 +251,43 @@ struct ship_type_entry *snis_read_ship_types(char *filename, int *count)
 		clean_spaces(line);
 		if (strcmp(line, "") == 0)
 			continue; /* skip blank lines */
+
+		/* Inside a "hard point {" block, only hard point keys are valid, and "}" ends
+		 * the hard point rather than the ship type.
+		 */
+		if (in_hard_point) {
+			if (has_prefix("ship type {", line)) {
+				fprintf(stderr, "%s:%d: unterminated hard point block\n",
+					filename, linecount);
+				errorcount++;
+				in_hard_point = 0;
+				/* fall through to handle "ship type {" normally */
+			} else {
+				if (has_prefix("}", line))
+					in_hard_point = 0;
+				else if (has_prefix("position:", line))
+					errorcount += parse_float_tuple_field(hps.pos, 3,
+								filename, line, linecount);
+				else if (has_prefix("forward:", line))
+					errorcount += parse_float_tuple_field(hps.forward, 3,
+								filename, line, linecount);
+				else if (has_prefix("up:", line))
+					errorcount += parse_float_tuple_field(hps.up, 3,
+								filename, line, linecount);
+				else if (has_prefix("elevation:", line))
+					errorcount += parse_float_tuple_field(hps.elevation, 2,
+								filename, line, linecount);
+				else if (has_prefix("azimuth:", line))
+					errorcount += parse_float_tuple_field(hps.azimuth, 2,
+								filename, line, linecount);
+				else {
+					fprintf(stderr, "Error at line %d in %s: '%s'\n",
+						linecount, filename, line);
+					errorcount++;
+				}
+				continue;
+			}
+		}
 
 		if (has_prefix("ship type {", line)) {
 			class[0] = '\0';
@@ -175,7 +312,18 @@ struct ship_type_entry *snis_read_ship_types(char *filename, int *count)
 			axis[2] = '\0';
 			axis[3] = '\0';
 			nrots = 0;
+			init_hard_point_spec(&hps);
 			continue;
+		} else if (has_prefix("hard point {", line)) {
+			if (hps.present) {
+				fprintf(stderr,
+					"%s:%d: only one hard point per ship type is supported, using the last one\n",
+					filename, linecount);
+				errorcount++;
+				init_hard_point_spec(&hps);
+			}
+			hps.present = 1;
+			in_hard_point = 1;
 		} else if (has_prefix("class:", line)) {
 			strlcpy(class, get_field(line), sizeof(class));
 		} else if (has_prefix("model file:", line)) {
@@ -292,6 +440,8 @@ struct ship_type_entry *snis_read_ship_types(char *filename, int *count)
 			st[n].relative_mass = relative_mass;
 			st[n].mass_kg = relative_mass * 330000.0; /* max takeoff weight of 747 in kg */
 			st[n].scrap_value = scrap_value;
+			errorcount += finish_hard_point(&hps, SHIP_MESH_SCALE * extra_scaling,
+						&st[n].hard_point, class, filename, linecount);
 
 			st[n].nrotations = nrots;
 			for (i = 0; i < nrots; i++) {
@@ -308,6 +458,9 @@ struct ship_type_entry *snis_read_ship_types(char *filename, int *count)
 			fprintf(stderr, "Error at line %d in %s: '%s'\n", linecount, filename, line);
 		}
 	}
+	if (in_hard_point)
+		fprintf(stderr, "%s:%d: unterminated hard point block at end of file\n",
+			filename, linecount);
 	*count = n;
 	fclose(f);
 	return st;
@@ -357,6 +510,21 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	fprintf(stderr, "Read %d ship types\n", count);
+	for (int i = 0; i < count; i++) {
+		struct hard_point *hp = &ste[i].hard_point;
+
+		if (!hp->present)
+			continue;
+		fprintf(stderr, "%s hard point: pos (%g, %g, %g) forward (%g, %g, %g) up (%g, %g, %g)\n",
+			ste[i].class, hp->pos.v.x, hp->pos.v.y, hp->pos.v.z,
+			hp->forward.v.x, hp->forward.v.y, hp->forward.v.z,
+			hp->up.v.x, hp->up.v.y, hp->up.v.z);
+		fprintf(stderr, "    elevation %g to %g, azimuth %g to %g degrees\n",
+			hp->elevation_lower_limit * 180.0 / M_PI,
+			hp->elevation_upper_limit * 180.0 / M_PI,
+			hp->azimuth_lower_limit * 180.0 / M_PI,
+			hp->azimuth_upper_limit * 180.0 / M_PI);
+	}
 	return 0;
 }
 #endif

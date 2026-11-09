@@ -1095,7 +1095,7 @@ $(OD)/power-model.o:   power-model.c Makefile ${ODT}
 $(OD)/stacktrace.o:   stacktrace.c Makefile ${ODT}
 	$(Q)$(COMPILE)
 
-$(OD)/snis_ship_type.o:   snis_ship_type.c snis_ship_type.h corporations.h Makefile ${ODT}
+$(OD)/snis_ship_type.o:   snis_ship_type.c snis_ship_type.h quat.h corporations.h Makefile ${ODT}
 	$(Q)$(COMPILE)
 
 bin/snis_launcher:	snis_launcher
@@ -1106,8 +1106,8 @@ bin/update_assets_from_launcher.sh:	util/update_assets_from_launcher.sh
 	./modify_snis_launcher.sh util/update_assets_from_launcher.sh "${DESTDIR}" "${PREFIX}" > bin/update_assets_from_launcher.sh
 	chmod +x bin/update_assets_from_launcher.sh
 
-bin/test_snis_ship_type: snis_ship_type.c snis_ship_type.h ${OD}/string-utils.o ${OD}/corporations.o ${OD}/rts_unit_data.o ${BIN}
-	$(CC) ${MYCFLAGS} -DTEST_SNIS_SHIP_TYPE -o bin/test_snis_ship_type snis_ship_type.c ${OD}/string-utils.o ${OD}/corporations.o ${OD}/rts_unit_data.o
+bin/test_snis_ship_type: snis_ship_type.c snis_ship_type.h quat.h ${OD}/string-utils.o ${OD}/corporations.o ${OD}/rts_unit_data.o ${OD}/stacktrace.o ${BIN}
+	$(CC) ${MYCFLAGS} -DTEST_SNIS_SHIP_TYPE -o bin/test_snis_ship_type snis_ship_type.c ${OD}/string-utils.o ${OD}/corporations.o ${OD}/rts_unit_data.o ${OD}/stacktrace.o -lm
 
 $(OD)/snis_faction.o:   snis_faction.c string-utils.h Makefile ${ODT}
 	$(Q)$(COMPILE)

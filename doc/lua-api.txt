@@ -692,6 +692,15 @@ add_turret(parent_id, x, y, z, firing_interval) -- adds a turret onto the specif
   Example:
 	turret_id = add_turret(starbase_id, 100, 100, 0);
 
+add_npc_turret(ship_id) -- adds a turret onto the specified NPC ship at its model's
+	hard point, if the ship model has a hard point and the ship does not already
+	have a turret. Returns the ID of the ship's turret (newly created or already
+	present), or nil if the ship does not exist, is not an NPC ship, or has no
+	hard point.
+
+  Example:
+	turret_id = add_npc_turret(ship_id);
+
 add_block(parent_id, x, y, z, sx, sy, sz, rotx, roty, rotz, angle, material_index, form);
 	Adds a "block" into the universe at the specified location (or relative location
 	if parent_id >= 0) and size, with specified orientation and material.

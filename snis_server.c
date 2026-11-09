@@ -14356,6 +14356,21 @@ static int add_turret(int parent_id, double x, double y, double z,
 	return i;
 }
 
+static int find_npc_turret(struct snis_entity *ship)
+{
+	int i;
+
+	for (i = 0; i <= snis_object_pool_highest_object(pool); i++) {
+		if (!go[i].alive)
+			continue;
+		if (go[i].type != OBJTYPE_TURRET)
+			continue;
+		if (go[i].tsd.turret.parent_id == ship->id)
+			return i;
+	}
+	return -1;
+}
+
 static int add_npc_turret(struct snis_entity *ship)
 {
 	struct hard_point *hp = &ship_type[ship->tsd.ship.shiptype].hard_point;
@@ -14365,6 +14380,9 @@ static int add_npc_turret(struct snis_entity *ship)
 
 	if (!hp->present)
 		return -1;
+	i = find_npc_turret(ship);
+	if (i >= 0)
+		return i;
 	vec3_cross(&right, &hp->forward, &hp->up); /* turret frame: X forward, Y up, Z right */
 	quat_from_basis(&rel, &hp->forward, &hp->up, &right);
 	quat_rot_vec(&wpos, &hp->pos, &ship->orientation);
@@ -14380,6 +14398,31 @@ static int add_npc_turret(struct snis_entity *ship)
 	go[i].tsd.turret.azimuth_lower_limit = hp->azimuth_lower_limit;
 	go[i].tsd.turret.azimuth_upper_limit = hp->azimuth_upper_limit;
 	return i;
+}
+
+static int l_add_npc_turret(lua_State *l)
+{
+	double rid;
+	uint32_t ship_id;
+	int i, s;
+
+	rid = lua_tonumber(l, 1);
+
+	pthread_mutex_lock(&universe_mutex);
+	ship_id = (uint32_t) rid;
+	s = lookup_by_id(ship_id);
+	if (s < 0 || go[s].type != OBJTYPE_NPCSHIP) {
+		pthread_mutex_unlock(&universe_mutex);
+		lua_pushnil(l);
+		return 1;
+	}
+	i = add_npc_turret(&go[s]);
+	if (i < 0)
+		lua_pushnil(l);
+	else
+		lua_pushnumber(l, (double) go[i].id);
+	pthread_mutex_unlock(&universe_mutex);
+	return 1;
 }
 
 static int l_add_turret(lua_State *l)
@@ -30112,6 +30155,7 @@ static void setup_lua(void)
 	add_lua_callable_fn(l_refuel_player_ship, "refuel_player_ship");
 	add_lua_callable_fn(l_show_menu, "show_menu");
 	add_lua_callable_fn(l_add_turret, "add_turret");
+	add_lua_callable_fn(l_add_npc_turret, "add_npc_turret");
 	add_lua_callable_fn(l_add_block, "add_block");
 	add_lua_callable_fn(l_add_turrets_to_block_face, "add_turrets_to_block_face");
 	add_lua_callable_fn(l_comms_channel_listen, "comms_channel_listen");

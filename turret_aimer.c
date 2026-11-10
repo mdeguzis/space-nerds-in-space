@@ -79,12 +79,25 @@ union quat *turret_aim(double target_x, double target_y, double target_z,
 	xzdist = sqrtf(to_current_aim.v.z * to_current_aim.v.z + to_current_aim.v.x * to_current_aim.v.x);
 	current_elevation = atan2f(to_current_aim.v.y, xzdist);
 
-	/* Now we have the current elevation and azimuth
-	 * Rate limit change to each to make the turret swing smoothly
+	/* Enforce upper and lower limits on desired elevation and azimuth,
+	 * then rate limit change to each to make the turret swing smoothly.
+	 * If azimuth limits prevent crossing +/-pi, turn the non-wrapping way.
 	 */
 
-	delta_elevation = short_angular_distance(current_elevation, elevation);
-	delta_azimuth = short_angular_distance(current_azimuth, azimuth);
+	if (elevation > turret->elevation_upper_limit)
+		elevation = turret->elevation_upper_limit;
+	else if (elevation < turret->elevation_lower_limit)
+		elevation = turret->elevation_lower_limit;
+	if (azimuth > turret->azimuth_upper_limit)
+		azimuth = turret->azimuth_upper_limit;
+	else if (azimuth < turret->azimuth_lower_limit)
+		azimuth = turret->azimuth_lower_limit;
+
+	delta_elevation = elevation - current_elevation;
+	if (turret->azimuth_lower_limit <= -M_PI && turret->azimuth_upper_limit >= M_PI)
+		delta_azimuth = short_angular_distance(current_azimuth, azimuth);
+	else
+		delta_azimuth = azimuth - current_azimuth;
 	if (delta_azimuth > turret->azimuth_rate_limit)
 		delta_azimuth = turret->azimuth_rate_limit;
 	else if (delta_azimuth < -turret->azimuth_rate_limit)

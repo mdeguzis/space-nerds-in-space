@@ -134,9 +134,18 @@ union quat *turret_aim(double target_x, double target_y, double target_z,
 	quat_init_axis(&pitch, pitch_axis.v.x, pitch_axis.v.y, pitch_axis.v.z, elevation);
 	quat_mul(new_turret_orientation, &pitch, new_turret_base_orientation);
 
-	if (aim_is_good)
-		*aim_is_good = (fabsf(delta_elevation) < 0.5 * M_PI / 180.0 &&
-				fabsf(delta_azimuth) < 0.5 * M_PI / 180.0);
+	if (aim_is_good) {
+		union vec3 new_aim = { { 1.0f, 0.0f, 0.0f } };
+		float dist = vec3_magnitude(&to_target);
+
+		quat_rot_vec_self(&new_aim, new_turret_orientation);
+		quat_rot_vec_self(&new_aim, &inverse_rest);
+		if (dist < 1e-5f)
+			*aim_is_good = 1;
+		else
+			*aim_is_good = (vec3_dot(&new_aim, &to_target) / dist >=
+					cosf(0.5f * M_PI / 180.0f));
+	}
 
 	return new_turret_orientation;
 }

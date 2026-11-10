@@ -608,12 +608,13 @@ float float_lerp(float from, float to, float t)
 
 double short_angular_distance(double from, double to)
 {
-	double distance;
+	double distance = fmod(to - from, 2.0 * M_PI);
 
-	distance = to - from;
-	if (fabs(distance) < M_PI)
-		return distance;
-	return 2.0 * M_PI - distance;
+	if (distance > M_PI)
+		distance -= 2.0 * M_PI;
+	else if (distance < -M_PI)
+		distance += 2.0 * M_PI;
+	return distance;
 }
 
 float sigmoid(float x, float sigma, float lambda)
@@ -764,9 +765,25 @@ static void test_disc_rectangle_intersection_area(void)
 	check_against_quadrature("all four corners outside disc", 0, 0, 1, -0.5, -0.5, 0.5, 0.5);
 }
 
+static void test_short_angular_distance(void)
+{
+	check("short_angular_distance: zero", short_angular_distance(1.0, 1.0), 0.0, 1e-9);
+	check("short_angular_distance: small positive",
+		short_angular_distance(0.2, 0.7), 0.5, 1e-9);
+	check("short_angular_distance: small negative",
+		short_angular_distance(0.7, 0.2), -0.5, 1e-9);
+	check("short_angular_distance: across +pi/-pi CCW",
+		short_angular_distance(M_PI - 0.1, -M_PI + 0.1), 0.2, 1e-9);
+	check("short_angular_distance: across +pi/-pi CW",
+		short_angular_distance(-M_PI + 0.1, M_PI - 0.1), -0.2, 1e-9);
+	check("short_angular_distance: multi-turn",
+		short_angular_distance(0.0, 4.0 * M_PI + 0.25), 0.25, 1e-9);
+}
+
 int main(__attribute__((unused)) int argc, __attribute__((unused)) char *argv[])
 {
 	test_disc_rectangle_intersection_area();
+	test_short_angular_distance();
 	if (failures) {
 		printf("%d failure%s\n", failures, failures == 1 ? "" : "s");
 		return 1;
